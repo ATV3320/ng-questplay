@@ -17,19 +17,30 @@ abstract contract Challenge {
         assembly {
             let len := mload(array)
             copy := mload(0x40)
-            mstore(0x40, add(copy, and(add(add(len, 0x20), 0x1f), not(0x1f))))
             mstore(copy, len)
             
-            // Copy word-sized chunks
-            let src := add(array, 0x20)
-            let dst := add(copy, 0x20)
-            let end := add(src, len)
-            
-            for {} lt(src, end) {} {
-                mstore(dst, mload(src))
-                src := add(src, 0x20)
-                dst := add(dst, 0x20)
+            switch gt(len, 64)
+            case 0 {
+                // For small arrays (<=64 bytes), unroll the loop
+                mstore(add(copy, 32), mload(add(array, 32)))
+                mstore(add(copy, 64), mload(add(array, 64)))
+                mstore(add(copy, 96), mload(add(array, 96)))
             }
+            default {
+                // For larger arrays, use a loop
+                let src := add(array, 32)
+                let dst := add(copy, 32)
+                let end := add(src, len)
+                
+                for {} lt(src, end) {} {
+                    mstore(dst, mload(src))
+                    src := add(src, 32)
+                    dst := add(dst, 32)
+                }
+            }
+            
+            // Update the free memory pointer
+            mstore(0x40, and(add(add(copy, add(len, 32)), 31), not(31)))
         }
     }
 }
